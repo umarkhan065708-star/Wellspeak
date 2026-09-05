@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
       const audioBuffer = tts.toBuffer();
 
-      return new NextResponse(audioBuffer, {
+      return new NextResponse(audioBuffer as any, {
         status: 200,
         headers: {
           'Content-Type': 'audio/mpeg',
