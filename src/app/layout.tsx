@@ -7,6 +7,9 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'VoiceCraft Studio - Microsoft Edge Neural TTS Platform',
   description: 'Generate high quality, natural AI speech with Microsoft Edge Neural Voices in 100+ languages.',
+  verification: {
+    google: 'XJNi2kvEKYGdyoZs4ABZRVQemOtBiP8w0I_CdLC1LK8',
+  },
 };
 
 export default function RootLayout({
