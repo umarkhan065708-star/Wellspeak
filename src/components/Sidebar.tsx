@@ -46,14 +46,6 @@ export function Sidebar() {
       </div>
 
       <div className="px-4 space-y-1">
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-medium transition-colors">
-          <HelpCircle className="w-5 h-5" />
-          Support
-        </button>
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-medium transition-colors">
-          <Code className="w-5 h-5" />
-          API Keys
-        </button>
         <button
           onClick={() => signOut()}
           className="w-full flex items-center gap-3 px-3 py-2.5 text-red-500 hover:bg-red-50 rounded-xl font-medium transition-colors mt-4"

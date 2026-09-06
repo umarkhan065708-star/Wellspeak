@@ -20,11 +20,13 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
   if (!isOpen) return null;
 
   // Extract unique languages for filter
-  const languages = Array.from(new Set(voices.map(v => getLanguageName(v.Locale)))).sort();
+  const languages = Array.from(new Set(voices.map(v => getLanguageName(v.Locale || "")))).sort();
 
   const filteredVoices = voices.filter(voice => {
-    const nameMatch = voice.FriendlyName.toLowerCase().includes(search.toLowerCase()) || voice.ShortName.toLowerCase().includes(search.toLowerCase());
-    const langMatch = filterLang === "All" || getLanguageName(voice.Locale) === filterLang;
+    const friendlyName = voice.FriendlyName || "";
+    const shortName = voice.ShortName || "";
+    const nameMatch = friendlyName.toLowerCase().includes(search.toLowerCase()) || shortName.toLowerCase().includes(search.toLowerCase());
+    const langMatch = filterLang === "All" || getLanguageName(voice.Locale || "") === filterLang;
     return nameMatch && langMatch;
   });
 
@@ -80,8 +82,9 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/50">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {filteredVoices.map(voice => {
-              const cleanName = voice.ShortName.split('-').pop()?.replace('Neural', '') || voice.ShortName;
-              const isSelected = selectedVoiceId === voice.ShortName;
+              const shortName = voice.ShortName || "";
+              const cleanName = shortName.split('-').pop()?.replace('Neural', '') || shortName || "Unknown Voice";
+              const isSelected = selectedVoiceId === shortName;
               
               return (
                 <div
