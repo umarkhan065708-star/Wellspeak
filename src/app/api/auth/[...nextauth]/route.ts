@@ -8,11 +8,27 @@ const handler = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
   ],
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
   pages: {
     signIn: "/login",
   },
   callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+      }
+      return token;
+    },
     async session({ session, token }) {
+      if (token && session.user) {
+        (session.user as any).id = token.id;
+      }
       return session;
     },
   },

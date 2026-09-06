@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-export const maxDuration = 60;
+export const maxDuration = 10;
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Text content is required' }, { status: 400 });
     }
 
-    if (text.length > 60000) {
-      return NextResponse.json({ error: 'Text exceeds maximum limit of 60000 characters' }, { status: 400 });
+    if (text.length > 3000) {
+      return NextResponse.json({ error: 'Text exceeds the maximum limit of 3,000 characters. Please shorten your text.' }, { status: 400 });
     }
 
     // Format rate, pitch, volume string if provided as numbers or formatted strings
