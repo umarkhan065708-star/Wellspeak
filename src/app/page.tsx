@@ -49,8 +49,22 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   
   const [activeTab, setActiveTab] = useState<'settings' | 'history'>('settings');
-  const [history, setHistory] = useState<{id: string, url: string, text: string, voice: string, date: Date}[]>([]);
+  const [history, setHistory] = useState<{id: string, url: string, text: string, voice: string, date: string | Date}[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<string[]>([]);
+
+  const updateText = (newText: string) => {
+    setText(newText);
+    try {
+      localStorage.setItem('wellspeak_saved_text', newText);
+    } catch (e) {}
+  };
+
+  const updateHistoryAndStorage = (newHistory: typeof history) => {
+    setHistory(newHistory);
+    try {
+      localStorage.setItem('wellspeak_saved_history', JSON.stringify(newHistory));
+    } catch (e) {}
+  };
 
   const toggleSelectAll = () => {
     if (selectedHistory.length === history.length) {
@@ -61,12 +75,14 @@ export default function Home() {
   };
 
   const deleteSelectedHistory = () => {
-    setHistory(prev => prev.filter(h => !selectedHistory.includes(h.id)));
+    const updated = history.filter(h => !selectedHistory.includes(h.id));
+    updateHistoryAndStorage(updated);
     setSelectedHistory([]);
   };
 
   const deleteHistoryItem = (id: string) => {
-    setHistory(prev => prev.filter(h => h.id !== id));
+    const updated = history.filter(h => h.id !== id);
+    updateHistoryAndStorage(updated);
     setSelectedHistory(prev => prev.filter(s => s !== id));
   };
 
@@ -77,6 +93,25 @@ export default function Home() {
   }, [status, router]);
 
   useEffect(() => {
+    // Load saved text from localStorage
+    try {
+      const savedText = localStorage.getItem('wellspeak_saved_text');
+      if (savedText) {
+        setText(savedText);
+      }
+    } catch (e) {}
+
+    // Load saved history from localStorage
+    try {
+      const savedHistory = localStorage.getItem('wellspeak_saved_history');
+      if (savedHistory) {
+        const parsed = JSON.parse(savedHistory);
+        if (Array.isArray(parsed)) {
+          setHistory(parsed);
+        }
+      }
+    } catch (e) {}
+
     setVoices([]);
     setSelectedVoice(null);
 
@@ -122,16 +157,27 @@ export default function Home() {
 
       if (!res.ok) throw new Error(await res.text());
       const audioBlob = await res.blob();
-      const url = URL.createObjectURL(audioBlob);
-      const newHistoryItem = {
-        id: Date.now().toString(),
-        url,
-        text,
-        voice: getCleanName(),
-        date: new Date()
+      
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = () => {
+        const base64Url = reader.result as string;
+        const newHistoryItem = {
+          id: Date.now().toString(),
+          url: base64Url,
+          text,
+          voice: getCleanName(),
+          date: new Date().toISOString()
+        };
+        setHistory(prev => {
+          const updated = [newHistoryItem, ...prev].slice(0, 20);
+          try {
+            localStorage.setItem('wellspeak_saved_history', JSON.stringify(updated));
+          } catch (e) {}
+          return updated;
+        });
+        setActiveTab('history');
       };
-      setHistory(prev => [newHistoryItem, ...prev]);
-      setActiveTab('history');
     } catch (err: any) {
       console.error('Generation Error:', err);
       setError(err.message || 'Unable to generate audio.');
@@ -262,7 +308,7 @@ export default function Home() {
             <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden mb-4 md:mb-6 min-h-[300px] md:min-h-[400px]">
               <textarea
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={(e) => updateText(e.target.value)}
                 placeholder="Write or paste your script..."
                 maxLength={3000}
                 className="flex-1 w-full p-4 md:p-6 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-600 bg-transparent focus:outline-none resize-none text-base md:text-lg leading-relaxed"
@@ -275,7 +321,7 @@ export default function Home() {
                     {samplePrompts.map(pill => (
                       <button 
                         key={pill.label}
-                        onClick={() => setText(pill.text)}
+                        onClick={() => updateText(pill.text)}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 shadow-sm transition-all"
                       >
                         {pill.icon}
@@ -506,7 +552,7 @@ export default function Home() {
                               <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between">
                                 <span className="truncate pr-2">{item.voice}</span>
                                 <span className="text-[10px] text-slate-400 font-normal shrink-0 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                                  {item.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                  {new Date(item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                 </span>
                               </h4>
                               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3 line-clamp-2">"{item.text}"</p>
@@ -522,7 +568,7 @@ export default function Home() {
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                 </a>
                                 <button 
-                                  onClick={() => setText(item.text)}
+                                  onClick={() => updateText(item.text)}
                                   className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                                   title="Reuse Script"
                                 >
@@ -711,7 +757,7 @@ export default function Home() {
                           <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between">
                             <span className="truncate pr-2">{item.voice}</span>
                             <span className="text-[10px] text-slate-400 font-normal shrink-0 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                              {item.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              {new Date(item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                             </span>
                           </h4>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3 line-clamp-2">"{item.text}"</p>
@@ -727,7 +773,7 @@ export default function Home() {
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                             </a>
                             <button 
-                              onClick={() => { setText(item.text); setIsMobileHistoryOpen(false); }}
+                              onClick={() => { updateText(item.text); setIsMobileHistoryOpen(false); }}
                               className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                               title="Reuse Script"
                             >
