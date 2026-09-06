@@ -1,330 +1,252 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Voice, HistoryItem } from '@/lib/types';
-import { DEFAULT_VOICES } from '@/lib/tts';
-import { VoiceSelector } from '@/components/VoiceSelector';
-import { ControlsPanel } from '@/components/ControlsPanel';
+import React, { useState, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { Sidebar } from '@/components/Sidebar';
+import { VoiceModal } from '@/components/VoiceModal';
+import { Voice, TTSRequest, HistoryItem } from '@/lib/types';
+import { getLanguageName } from '@/lib/languages';
 import { AudioPlayer } from '@/components/AudioPlayer';
-import { HistoryList } from '@/components/HistoryList';
-import { SamplePrompts } from '@/components/SamplePrompts';
-import {
-  Mic,
-  Sparkles,
-  Play,
-  Loader2,
-  Trash2,
-  Copy,
-  Check,
-  Volume2,
-  Radio,
-  FileText,
-  AlertCircle,
-} from 'lucide-react';
+import { Sparkles, Play, Settings2, ChevronRight, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function Home() {
-  const [voices, setVoices] = useState<Voice[]>(DEFAULT_VOICES);
-  const [selectedVoice, setSelectedVoice] = useState<Voice | null>(DEFAULT_VOICES[0]);
-  const [text, setText] = useState<string>(
-    'Welcome to VoiceCraft Studio! Select your preferred voice actor, adjust speaking speed and pitch, and generate natural AI speech instantly.'
-  );
+  const { data: session, status } = useSession();
+  const router = useRouter();
 
-  // Controls state
-  const [rate, setRate] = useState<number>(0);
-  const [pitch, setPitch] = useState<number>(0);
-  const [volume, setVolume] = useState<number>(100);
-  const [audioFormat, setAudioFormat] = useState<string>('audio-24khz-48kbitrate-mono-mp3');
-
-  // Synthesis & Audio state
-  const [isSynthesizing, setIsSynthesizing] = useState<boolean>(false);
-  const [isLoadingVoices, setIsLoadingVoices] = useState<boolean>(true);
+  const [text, setText] = useState('');
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState<Voice | null>(null);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isCopied, setIsCopied] = useState<boolean>(false);
+  const [speed, setSpeed] = useState('1.0');
+  
+  // Ref for audio element used for previews
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Fetch live voices from API
+  // Authentication check
   useEffect(() => {
-    async function fetchVoices() {
-      try {
-        setIsLoadingVoices(true);
-        const res = await fetch('/api/voices');
-        const data = await res.json();
-        if (data?.voices && Array.isArray(data.voices) && data.voices.length > 0) {
-          setVoices(data.voices);
-          // Default to Aria if present
-          const defaultV = data.voices.find((v: Voice) => v.ShortName === 'en-US-AriaNeural') || data.voices[0];
-          setSelectedVoice(defaultV);
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
+
+  // Load voices
+  useEffect(() => {
+    fetch('/api/voices')
+      .then((res) => res.json())
+      .then((data: Voice[]) => {
+        setVoices(data);
+        if (data.length > 0) {
+          // Default to an English voice
+          const defaultVoice = data.find(v => v.ShortName.includes('en-US-Aria')) || data[0];
+          setSelectedVoice(defaultVoice);
         }
-      } catch (err) {
-        console.warn('Failed to load online voices list, using defaults:', err);
-      } finally {
-        setIsLoadingVoices(false);
-      }
-    }
-
-    fetchVoices();
+      })
+      .catch((err) => console.error('Failed to load voices:', err));
   }, []);
 
-  // Load history from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('voicecraft_history');
-      if (saved) {
-        setHistory(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.warn('Could not read history from localStorage:', e);
-    }
-  }, []);
+  // Simple auto-warning for Urdu/Arabic text if English voice is selected
+  const isArabicScript = /[\u0600-\u06FF]/.test(text);
+  const showLanguageWarning = isArabicScript && selectedVoice && !selectedVoice.Locale.startsWith('ar') && !selectedVoice.Locale.startsWith('ur');
 
-  // Save history to localStorage on change
-  const saveHistory = (newHistory: HistoryItem[]) => {
-    setHistory(newHistory);
-    try {
-      localStorage.setItem('voicecraft_history', JSON.stringify(newHistory));
-    } catch (e) {
-      console.warn('Could not save history:', e);
-    }
-  };
-
-  const handleSynthesize = async () => {
+  const handleGenerate = async () => {
     if (!text.trim() || !selectedVoice) return;
-    setErrorMessage(null);
-    setIsSynthesizing(true);
+
+    setIsGenerating(true);
+    setCurrentAudioUrl(null);
 
     try {
-      const response = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          voice: selectedVoice.ShortName,
-          rate,
-          pitch,
-          volume,
-          format: audioFormat,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || errorData.error || 'Speech synthesis failed');
-      }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      setCurrentAudioUrl(url);
-
-      // Add to history
-      const newItem: HistoryItem = {
-        id: Date.now().toString(),
-        text: text.trim().slice(0, 100) + (text.length > 100 ? '...' : ''),
-        voiceShortName: selectedVoice.ShortName,
-        voiceFriendlyName: selectedVoice.FriendlyName,
-        locale: selectedVoice.Locale,
-        timestamp: Date.now(),
-        audioUrl: url,
-        rate: `${rate > 0 ? '+' : ''}${rate}%`,
-        pitch: `${pitch > 0 ? '+' : ''}${pitch}Hz`,
-        format: audioFormat,
+      const requestBody: TTSRequest = {
+        text,
+        voice: selectedVoice.ShortName,
+        rate: speed === '1.0' ? '+0%' : `${speed > '1.0' ? '+' : ''}${Math.round((parseFloat(speed) - 1) * 100)}%`,
       };
 
-      saveHistory([newItem, ...history.slice(0, 19)]);
-    } catch (err: any) {
-      console.error('Synthesis Error:', err);
-      setErrorMessage(err.message || 'Error generating speech. Please try again.');
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const audioBlob = await res.blob();
+      const url = URL.createObjectURL(audioBlob);
+      setCurrentAudioUrl(url);
+
+    } catch (err) {
+      alert('Error generating speech: ' + (err as Error).message);
     } finally {
-      setIsSynthesizing(false);
+      setIsGenerating(false);
     }
   };
 
-  const handleResetControls = () => {
-    setRate(0);
-    setPitch(0);
-    setVolume(100);
-  };
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
+      </div>
+    );
+  }
 
-  const handleCopyText = () => {
-    navigator.clipboard.writeText(text);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  };
-
-  const handlePlayHistoryItem = (item: HistoryItem) => {
-    setCurrentAudioUrl(item.audioUrl);
-  };
-
-  const handleDeleteHistoryItem = (id: string) => {
-    saveHistory(history.filter((h) => h.id !== id));
-  };
-
-  const handleClearHistory = () => {
-    saveHistory([]);
-  };
+  if (status === 'unauthenticated') {
+    return null; // Will redirect
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white">
-      {/* Background Subtle Ambient Glow */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-brand-600/15 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/3 -right-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl"></div>
-      </div>
+    <div className="flex min-h-screen bg-white">
+      {/* Left Sidebar */}
+      <Sidebar />
 
-      {/* Header Bar */}
-      <header className="relative z-10 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+        
+        {/* Top Navbar */}
+        <header className="h-20 border-b border-slate-200 flex items-center justify-between px-8 bg-white shrink-0">
+          <h1 className="text-xl font-bold text-slate-900">Text to Speech</h1>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-purple-600 flex items-center justify-center shadow-lg shadow-brand-500/20">
-              <Radio className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
-                VoiceCraft Studio
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/30 font-semibold">
-                  Edge TTS v1.1
-                </span>
-              </h1>
-              <p className="text-xs text-slate-400">
-                Next-Gen Neural Text-to-Speech Engine
-              </p>
+            <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center font-bold text-sm uppercase">
+              {session?.user?.name?.[0] || 'U'}
             </div>
           </div>
+        </header>
 
-          <div className="flex items-center gap-3">
-            <a
-              href="https://github.com/andresayac/edge-tts"
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-colors hidden sm:flex items-center gap-1.5"
-            >
-              <span>Powered by edge-tts</span>
-            </a>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-8 flex-1 w-full">
-        {errorMessage && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center gap-3 text-red-400 text-sm">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Voice Selector & Speech Tuning */}
-          <div className="lg:col-span-5 space-y-6">
-            <VoiceSelector
-              voices={voices}
-              selectedVoice={selectedVoice}
-              onSelectVoice={setSelectedVoice}
-              isLoadingVoices={isLoadingVoices}
-            />
-
-            <ControlsPanel
-              rate={rate}
-              setRate={setRate}
-              pitch={pitch}
-              setPitch={setPitch}
-              volume={volume}
-              setVolume={setVolume}
-              audioFormat={audioFormat}
-              setAudioFormat={setAudioFormat}
-              onReset={handleResetControls}
-            />
-          </div>
-
-          {/* Right Column: Text Input, Sample Prompts, Player & History */}
-          <div className="lg:col-span-7 space-y-6">
-            {/* Text Editor Box */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-brand-400" />
-                  <span className="text-sm font-bold text-white">Input Script</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCopyText}
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg text-xs flex items-center gap-1 transition-colors"
-                    title="Copy text"
-                  >
-                    {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                  <button
-                    onClick={() => setText('')}
-                    className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg text-xs flex items-center gap-1 transition-colors"
-                    title="Clear editor"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+        {/* 2-Column Layout for Main Content */}
+        <div className="flex-1 overflow-hidden flex">
+          
+          {/* Left: Text Area */}
+          <div className="flex-1 flex flex-col p-8 overflow-y-auto custom-scrollbar">
+            
+            {showLanguageWarning && (
+              <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-sm">Language Mismatch Detected</p>
+                  <p className="text-xs mt-0.5">You pasted Urdu/Arabic text, but an English voice is selected. The voice may sound corrupted. Please click the voice button on the right and select an <b>Urdu</b> or <b>Arabic</b> voice.</p>
                 </div>
               </div>
+            )}
 
-              {/* Text Area */}
+            <div className="flex-1 flex flex-col bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden mb-6 min-h-[400px]">
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Type or paste text here to convert into natural neural speech..."
-                rows={6}
+                placeholder="Write or paste your script..."
                 maxLength={60000}
-                className="w-full p-4 bg-slate-950/90 border border-slate-800/80 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-500 resize-none transition-colors custom-scrollbar"
+                className="flex-1 w-full p-6 text-slate-700 placeholder-slate-400 focus:outline-none resize-none text-lg leading-relaxed"
               />
-
-              {/* Footer info & Action button */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-xs text-slate-500 font-mono">
-                  {text.length} / 60000 characters
+              <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="text-xs text-slate-400 font-medium">
+                  {text.length} / 60,000
                 </div>
-
-                <button
-                  onClick={handleSynthesize}
-                  disabled={isSynthesizing || !text.trim() || !selectedVoice}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-lg shadow-brand-500/25 transition-all transform active:scale-98 cursor-pointer"
-                >
-                  {isSynthesizing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Synthesizing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Generate Speech</span>
-                    </>
-                  )}
-                </button>
               </div>
             </div>
 
-            {/* Sample Prompts */}
-            <SamplePrompts onSelectPrompt={(promptText) => setText(promptText)} />
+            {currentAudioUrl && selectedVoice && (
+              <div className="mt-auto">
+                <h3 className="text-sm font-bold text-slate-900 mb-3">Generated Audio</h3>
+                <AudioPlayer
+                  audioUrl={currentAudioUrl}
+                  textSnippet={text}
+                  voiceName={selectedVoice.ShortName.split('-').pop()?.replace('Neural', '') || selectedVoice.ShortName}
+                />
+              </div>
+            )}
+          </div>
 
-            <AudioPlayer
-              audioUrl={currentAudioUrl}
-              textSnippet={text}
-              voiceName={selectedVoice ? (selectedVoice.ShortName.split('-').pop()?.replace('Neural', '') || selectedVoice.ShortName) : 'Selected Voice'}
-            />
+          {/* Right: Settings Panel */}
+          <div className="w-80 border-l border-slate-200 bg-slate-50/50 flex flex-col overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 flex gap-6">
+              <button className="text-sm font-bold text-slate-900 border-b-2 border-slate-900 pb-1">Settings</button>
+              <button className="text-sm font-medium text-slate-400 hover:text-slate-600 pb-1">History</button>
+            </div>
 
-            {/* History List */}
-            <HistoryList
-              history={history}
-              onPlayHistoryItem={handlePlayHistoryItem}
-              onDeleteItem={handleDeleteHistoryItem}
-              onClearAll={handleClearHistory}
-            />
+            <div className="p-6 space-y-8 flex-1">
+              {/* Voice Selection */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">Voice</label>
+                <button
+                  onClick={() => setIsVoiceModalOpen(true)}
+                  className="w-full flex items-center justify-between p-4 bg-white border border-amber-200 rounded-2xl hover:border-amber-400 hover:shadow-md transition-all group text-left"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-amber-500">👑</span>
+                      <span className="font-bold text-slate-900 text-sm">
+                        {selectedVoice ? (selectedVoice.ShortName.split('-').pop()?.replace('Neural', '') || selectedVoice.ShortName) : 'Select Voice'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {selectedVoice ? `${getLanguageName(selectedVoice.Locale)} - ${selectedVoice.Gender}` : 'Click to choose'}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-amber-500 transition-colors" />
+                </button>
+              </div>
+
+              {/* Language Display (Readonly for now as it's tied to Voice) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">Language</label>
+                <div className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 font-medium">
+                  {selectedVoice ? getLanguageName(selectedVoice.Locale) : 'Auto'}
+                </div>
+              </div>
+
+              {/* Speed Control */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">Speed</label>
+                  <span className="text-xs font-bold text-slate-500">{speed}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={speed}
+                  onChange={(e) => setSpeed(e.target.value)}
+                  className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
+                />
+              </div>
+
+            </div>
+
+            {/* Generate Button Fixed at Bottom of Sidebar */}
+            <div className="p-6 bg-slate-50 border-t border-slate-200 mt-auto">
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating || !text.trim()}
+                className="w-full py-4 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    Generate
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-slate-900 bg-slate-950 py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} VoiceCraft Studio. Built with Next.js, Tailwind CSS, & edge-tts.</p>
-        </div>
-      </footer>
+      {/* Voice Selection Modal */}
+      <VoiceModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        voices={voices}
+        onSelectVoice={setSelectedVoice}
+        selectedVoiceId={selectedVoice?.ShortName}
+      />
     </div>
   );
 }

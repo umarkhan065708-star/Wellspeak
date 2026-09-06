@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Volume2, VolumeX, RotateCcw, Sparkles } from 'lucide-react';
+import { Play, Pause, Download, Volume2, VolumeX, Sparkles } from 'lucide-react';
 
 interface AudioPlayerProps {
   audioUrl: string | null;
@@ -18,7 +18,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1.0);
 
@@ -41,7 +40,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     };
   }, [audioUrl]);
 
-  // Autoplay when audioUrl changes
   useEffect(() => {
     if (audioUrl && audioRef.current) {
       audioRef.current.currentTime = 0;
@@ -93,7 +91,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const link = document.createElement('a');
     link.href = audioUrl;
     const cleanSnippet = textSnippet.slice(0, 20).replace(/[^a-zA-Z0-9]/g, '_');
-    link.download = `EdgeTTS_${voiceName.split(' ')[0]}_${cleanSnippet}.mp3`;
+    link.download = `Wellspeak_${voiceName.split(' ')[0]}_${cleanSnippet}.mp3`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -101,52 +99,48 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   if (!audioUrl) {
     return (
-      <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-6 text-center text-slate-500">
-        <Sparkles className="w-8 h-8 mx-auto mb-2 text-slate-700 animate-pulse" />
+      <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-6 text-center text-slate-500">
+        <Sparkles className="w-8 h-8 mx-auto mb-2 text-slate-300 animate-pulse" />
         <p className="text-xs">Audio output player will appear here once generated.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-brand-500/30 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
       <audio ref={audioRef} src={audioUrl} />
 
-      {/* Top Details & Equalizer */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          {/* Animated Equalizer */}
-          <div className="flex items-end gap-1 h-6 w-8 px-1 py-0.5 bg-slate-950/80 rounded-lg border border-slate-800">
-            <span className={`w-1 bg-brand-400 rounded-full transition-all ${isPlaying ? 'animate-equalizer-1' : 'h-1.5'}`} />
-            <span className={`w-1 bg-purple-400 rounded-full transition-all ${isPlaying ? 'animate-equalizer-2' : 'h-3'}`} />
-            <span className={`w-1 bg-pink-400 rounded-full transition-all ${isPlaying ? 'animate-equalizer-3' : 'h-2'}`} />
-            <span className={`w-1 bg-emerald-400 rounded-full transition-all ${isPlaying ? 'animate-equalizer-4' : 'h-1'}`} />
+          <div className="flex items-end gap-1 h-6 w-8 px-1 py-0.5 bg-slate-100 rounded-lg border border-slate-200">
+            <span className={`w-1 bg-slate-800 rounded-full transition-all ${isPlaying ? 'animate-equalizer-1' : 'h-1.5'}`} />
+            <span className={`w-1 bg-slate-800 rounded-full transition-all ${isPlaying ? 'animate-equalizer-2' : 'h-3'}`} />
+            <span className={`w-1 bg-slate-800 rounded-full transition-all ${isPlaying ? 'animate-equalizer-3' : 'h-2'}`} />
+            <span className={`w-1 bg-slate-800 rounded-full transition-all ${isPlaying ? 'animate-equalizer-4' : 'h-1'}`} />
           </div>
 
           <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <span>{voiceName}</span>
-              <span className="text-[10px] bg-brand-500/20 text-brand-300 border border-brand-500/30 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
                 Neural Output
               </span>
             </h3>
-            <p className="text-xs text-slate-400 truncate max-w-xs md:max-w-md">
+            <p className="text-xs text-slate-500 truncate max-w-xs md:max-w-md">
               "{textSnippet}"
             </p>
           </div>
         </div>
 
-        {/* Download Button */}
         <button
           onClick={handleDownload}
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-brand-500 hover:bg-brand-400 text-white font-medium text-xs rounded-xl shadow-lg shadow-brand-500/20 transition-all transform active:scale-95"
+          className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold text-xs rounded-xl transition-all"
         >
           <Download className="w-4 h-4" />
           <span>Download MP3</span>
         </button>
       </div>
 
-      {/* Scrubber & Time */}
       <div className="space-y-1.5 mb-4">
         <input
           type="range"
@@ -154,42 +148,37 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           max={duration || 100}
           value={currentTime}
           onChange={handleSeek}
-          className="w-full h-2 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-brand-400"
+          className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-slate-900"
         />
-        <div className="flex justify-between text-[11px] font-mono text-slate-400">
+        <div className="flex justify-between text-[11px] font-bold text-slate-400">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
         </div>
       </div>
 
-      {/* Player Controls Bar */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
         <div className="flex items-center gap-2">
-          {/* Play/Pause */}
           <button
             onClick={togglePlay}
-            className="w-10 h-10 rounded-xl bg-brand-500 hover:bg-brand-400 text-white flex items-center justify-center shadow-lg shadow-brand-500/30 transition-all transform active:scale-95"
+            className="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-sm transition-all transform active:scale-95"
           >
             {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
           </button>
 
-          {/* Speed Toggle */}
           <button
             onClick={handlePlaybackRateChange}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono font-semibold transition-colors"
-            title="Toggle playback speed"
+            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors"
           >
             {playbackRate}x
           </button>
         </div>
 
-        {/* Volume */}
         <div className="flex items-center gap-2">
-          <button onClick={toggleMute} className="text-slate-400 hover:text-white transition-colors">
-            {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
+          <button onClick={toggleMute} className="text-slate-400 hover:text-slate-600 transition-colors">
+            {isMuted ? <VolumeX className="w-4 h-4 text-red-500" /> : <Volume2 className="w-4 h-4" />}
           </button>
         </div>
       </div>
     </div>
   );
-};
+}

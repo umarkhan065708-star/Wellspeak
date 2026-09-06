@@ -5,12 +5,14 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'VoiceCraft Studio - Microsoft Edge Neural TTS Platform',
-  description: 'Generate high quality, natural AI speech with Microsoft Edge Neural Voices in 100+ languages.',
+  title: 'Wellspeak - Next-Gen Neural TTS',
+  description: 'Give your words a famous voice. Turn any script into stunning, lifelike speech with Wellspeak.',
   verification: {
     google: 'XJNi2kvEKYGdyoZs4ABZRVQemOtBiP8w0I_CdLC1LK8',
   },
 };
+
+import { AuthProvider } from '@/components/AuthProvider';
 
 export default function RootLayout({
   children,
@@ -18,9 +20,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.className} bg-slate-950 text-slate-100 antialiased selection:bg-brand-500 selection:text-white`}>
-        {children}
+    <html lang="en" className="light">
+      <body className={`${inter.className} bg-white text-slate-900 antialiased selection:bg-brand-500 selection:text-white`}>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
