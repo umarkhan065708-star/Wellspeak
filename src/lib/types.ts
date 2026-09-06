@@ -1,11 +1,21 @@
 export interface Voice {
+  // Edge TTS specific
   ShortName: string;
   FriendlyName: string;
   Gender: 'Male' | 'Female' | string;
   Locale: string;
-  SuggestedCodec?: string;
-  Status?: string;
-  VoicePersonalities?: string[];
+  
+  // ElevenLabs specific
+  voice_id?: string;
+  name?: string;
+  category?: string;
+  labels?: {
+    accent?: string;
+    description?: string;
+    age?: string;
+    gender?: string;
+    use_case?: string;
+  };
 }
 
 export interface TTSRequest {

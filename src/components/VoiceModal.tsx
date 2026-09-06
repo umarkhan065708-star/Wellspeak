@@ -11,23 +11,33 @@ interface VoiceModalProps {
   voices: Voice[];
   onSelectVoice: (voice: Voice) => void;
   selectedVoiceId?: string;
+  provider: 'edge' | 'elevenlabs';
 }
 
-export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoiceId }: VoiceModalProps) {
+export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoiceId, provider }: VoiceModalProps) {
   const [search, setSearch] = useState("");
   const [filterLang, setFilterLang] = useState("All");
 
   if (!isOpen) return null;
 
-  // Extract unique languages for filter
-  const languages = Array.from(new Set(voices.map(v => getLanguageName(v.Locale || "")))).sort();
+  // Extract unique languages/accents for filter
+  const languages = Array.from(new Set(
+    voices.map(v => provider === 'elevenlabs' ? (v.labels?.accent || "English") : getLanguageName(v.Locale || ""))
+  )).sort();
 
   const filteredVoices = voices.filter(voice => {
-    const friendlyName = voice.FriendlyName || "";
-    const shortName = voice.ShortName || "";
-    const nameMatch = friendlyName.toLowerCase().includes(search.toLowerCase()) || shortName.toLowerCase().includes(search.toLowerCase());
-    const langMatch = filterLang === "All" || getLanguageName(voice.Locale || "") === filterLang;
-    return nameMatch && langMatch;
+    if (provider === 'elevenlabs') {
+      const nameMatch = (voice.name || "").toLowerCase().includes(search.toLowerCase());
+      const accent = voice.labels?.accent || "English";
+      const langMatch = filterLang === "All" || accent === filterLang;
+      return nameMatch && langMatch;
+    } else {
+      const friendlyName = voice.FriendlyName || "";
+      const shortName = voice.ShortName || "";
+      const nameMatch = friendlyName.toLowerCase().includes(search.toLowerCase()) || shortName.toLowerCase().includes(search.toLowerCase());
+      const langMatch = filterLang === "All" || getLanguageName(voice.Locale || "") === filterLang;
+      return nameMatch && langMatch;
+    }
   });
 
   return (
@@ -35,9 +45,9 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
       <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white relative z-10">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Select premium voice</h2>
+            <h2 className="text-xl font-bold text-slate-900">Select {provider === 'elevenlabs' ? 'ElevenLabs' : 'Edge'} Voice</h2>
             <p className="text-sm text-slate-500">Search, filter, and choose a voice for this generation.</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
@@ -46,7 +56,7 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
         </div>
 
         {/* Search & Filters */}
-        <div className="p-6 border-b border-slate-100 space-y-4">
+        <div className="p-6 border-b border-slate-100 space-y-4 bg-white">
           <div className="flex items-center gap-3">
             <div className="flex-1 relative">
               <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -64,7 +74,7 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
                 onChange={(e) => setFilterLang(e.target.value)}
                 className="appearance-none pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-slate-300 focus:ring-4 focus:ring-slate-100 transition-all text-slate-700 font-medium cursor-pointer"
               >
-                <option value="All">All Languages</option>
+                <option value="All">All {provider === 'elevenlabs' ? 'Accents' : 'Languages'}</option>
                 {languages.map(lang => (
                   <option key={lang} value={lang}>{lang}</option>
                 ))}
@@ -82,13 +92,30 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/50">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {filteredVoices.map(voice => {
-              const shortName = voice.ShortName || "";
-              const cleanName = shortName.split('-').pop()?.replace('Neural', '') || shortName || "Unknown Voice";
-              const isSelected = selectedVoiceId === shortName;
+              
+              let cleanName = "";
+              let isSelected = false;
+              let subtitle = "";
+              let key = "";
+
+              if (provider === 'elevenlabs') {
+                cleanName = voice.name || "Unknown";
+                isSelected = selectedVoiceId === voice.voice_id;
+                key = voice.voice_id || cleanName;
+                const accent = voice.labels?.accent || "English";
+                const gender = voice.labels?.gender || "Unknown";
+                subtitle = `${accent} - ${gender}`;
+              } else {
+                const shortName = voice.ShortName || "";
+                cleanName = shortName.split('-').pop()?.replace('Neural', '') || shortName || "Unknown Voice";
+                isSelected = selectedVoiceId === shortName;
+                key = shortName;
+                subtitle = `${getLanguageName(voice.Locale || "")} - ${voice.Gender}`;
+              }
               
               return (
                 <div
-                  key={voice.ShortName}
+                  key={key}
                   onClick={() => {
                     onSelectVoice(voice);
                     onClose();
@@ -102,12 +129,12 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-bold text-slate-900">{cleanName}</h3>
-                      <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded flex items-center gap-1">
-                        Premium
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${provider === 'elevenlabs' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {provider === 'elevenlabs' ? 'PRO' : 'Premium'}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 truncate">
-                      {getLanguageName(voice.Locale)} - {voice.Gender}
+                      {subtitle}
                     </p>
                   </div>
                   
