@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Voice } from "@/lib/types";
 import { getLanguageName } from "@/lib/languages";
-import { Search, X, Play, Filter, Globe, ChevronDown, Star } from "lucide-react";
+import { Search, X, Play, Filter, Globe, ChevronDown, Star, Loader2, Square } from "lucide-react";
 
 interface VoiceModalProps {
   isOpen: boolean;
@@ -19,6 +19,8 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
   const [filterGender, setFilterGender] = useState("All");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   React.useEffect(() => {
     const saved = localStorage.getItem('favoriteVoices');
@@ -166,9 +168,39 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
 
                   <div className="flex items-center gap-2">
                     <button 
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        alert("Preview not available for Edge TTS voices yet.");
+                        if (audioRef.current) {
+                          audioRef.current.pause();
+                          audioRef.current = null;
+                        }
+                        if (playingId === shortName) {
+                          setPlayingId(null);
+                          return;
+                        }
+                        setPlayingId(shortName);
+                        try {
+                          const res = await fetch('/api/tts', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              text: 'Hello! This is a preview of this voice.',
+                              voice: shortName,
+                              rate: '+0%',
+                              pitch: '+0Hz',
+                            }),
+                          });
+                          if (!res.ok) throw new Error('Failed');
+                          const blob = await res.blob();
+                          const url = URL.createObjectURL(blob);
+                          const audio = new Audio(url);
+                          audioRef.current = audio;
+                          audio.onended = () => setPlayingId(null);
+                          audio.onerror = () => setPlayingId(null);
+                          audio.play();
+                        } catch {
+                          setPlayingId(null);
+                        }
                       }}
                       className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
                         isSelected 
@@ -176,7 +208,10 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:bg-brand-500 group-hover:text-white group-hover:shadow-md'
                       }`}
                     >
-                      <Play className="w-4 h-4 ml-1" />
+                      {playingId === shortName 
+                        ? <Square className="w-3.5 h-3.5" /> 
+                        : <Play className="w-4 h-4 ml-0.5" />
+                      }
                     </button>
                   </div>
                 </div>
