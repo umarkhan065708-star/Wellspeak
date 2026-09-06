@@ -41,22 +41,22 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 dark:bg-slate-950/80 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border dark:border-slate-800">
         
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white relative z-10">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 relative z-10">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Select {provider === 'elevenlabs' ? 'ElevenLabs' : 'Edge'} Voice</h2>
-            <p className="text-sm text-slate-500">Search, filter, and choose a voice for this generation.</p>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Select {provider === 'elevenlabs' ? 'ElevenLabs' : 'Edge'} Voice</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Search, filter, and choose a voice for this generation.</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Search & Filters */}
-        <div className="p-6 border-b border-slate-100 space-y-4 bg-white">
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800 space-y-4 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-3">
             <div className="flex-1 relative">
               <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -65,14 +65,14 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
                 placeholder="Search voices..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-300 focus:ring-4 focus:ring-slate-100 transition-all text-slate-900 placeholder:text-slate-400"
+                className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-brand-500 dark:focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-slate-900 dark:text-white placeholder:text-slate-400"
               />
             </div>
             <div className="relative">
               <select
                 value={filterLang}
                 onChange={(e) => setFilterLang(e.target.value)}
-                className="appearance-none pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-slate-300 focus:ring-4 focus:ring-slate-100 transition-all text-slate-700 font-medium cursor-pointer"
+                className="appearance-none pl-10 pr-10 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-slate-700 dark:text-slate-300 font-medium cursor-pointer"
               >
                 <option value="All">All {provider === 'elevenlabs' ? 'Accents' : 'Languages'}</option>
                 {languages.map(lang => (
@@ -89,7 +89,7 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
         </div>
 
         {/* Voice List */}
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/50 dark:bg-slate-950">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {filteredVoices.map(voice => {
               
@@ -122,23 +122,23 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
                   }}
                   className={`group flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border ${
                     isSelected 
-                      ? 'bg-slate-100 border-slate-300 shadow-sm' 
-                      : 'bg-white border-transparent hover:border-slate-200 hover:shadow-sm'
+                      ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 shadow-sm' 
+                      : 'bg-white dark:bg-slate-900 border-transparent dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-sm'
                   }`}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-slate-900">{cleanName}</h3>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${provider === 'elevenlabs' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <h3 className="font-bold text-slate-900 dark:text-white">{cleanName}</h3>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${provider === 'elevenlabs' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
                         {provider === 'elevenlabs' ? 'PRO' : 'Premium'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 truncate">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                       {subtitle}
                     </p>
                   </div>
                   
-                  <button className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-200 hover:text-slate-900">
+                  <button className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
                     <Play className="w-4 h-4 ml-0.5 fill-current" />
                   </button>
                 </div>

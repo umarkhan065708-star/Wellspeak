@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   },
 };
 
+import { ThemeProvider } from '@/components/ThemeProvider';
 import { AuthProvider } from '@/components/AuthProvider';
 
 export default function RootLayout({
@@ -20,11 +21,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="light">
-      <body className={`${inter.className} bg-white text-slate-900 antialiased selection:bg-brand-500 selection:text-white`}>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.className} bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 antialiased selection:bg-brand-500 selection:text-white`}>
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

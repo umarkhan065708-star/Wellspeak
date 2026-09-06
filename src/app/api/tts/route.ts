@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
