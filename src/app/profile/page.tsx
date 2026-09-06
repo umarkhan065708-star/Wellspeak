@@ -59,17 +59,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl">
-                  <CreditCard className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-slate-900 dark:text-white">Credits</h3>
-              </div>
-              <p className="text-3xl font-black text-slate-900 dark:text-white">19,932</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">characters remaining</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
               <div className="flex items-center gap-3 mb-4">

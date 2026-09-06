@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
 import { VoiceModal } from '@/components/VoiceModal';
 import { Voice, TTSRequest } from '@/lib/types';
-import { getLanguageName } from '@/lib/languages';
+import { getLanguageName, LOCALE_TO_LANGUAGE } from '@/lib/languages';
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { Sparkles, Play, Settings2, ChevronRight, AlertCircle, Loader2, User, LogOut, ChevronDown, Video, Presentation, AudioWaveform, Speech, PlayCircle, Library, Mic2 } from 'lucide-react';
 import Image from 'next/image';
@@ -27,10 +27,14 @@ export default function Home() {
   const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
   
   const [speed, setSpeed] = useState('1.0');
+  const [pitch, setPitch] = useState('0');
   const [intensity, setIntensity] = useState('75');
   
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [activeTab, setActiveTab] = useState<'settings' | 'history'>('settings');
+  const [history, setHistory] = useState<{url: string, text: string, voice: string, date: Date}[]>([]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -45,14 +49,15 @@ export default function Home() {
 
     fetch(endpoint)
       .then((res) => res.json())
-      .then((data: Voice[]) => {
-        setVoices(data);
-        if (data.length > 0) {
+      .then((data: any) => {
+        const voicesArray = Array.isArray(data) ? data : (data.voices || []);
+        setVoices(voicesArray);
+        if (voicesArray.length > 0) {
           if (provider === 'elevenlabs') {
-            const defaultV = data.find(v => v.name?.includes('Rachel') || v.name?.includes('Adam')) || data[0];
+            const defaultV = voicesArray.find((v: Voice) => v.name?.includes('Rachel') || v.name?.includes('Adam')) || voicesArray[0];
             setSelectedVoice(defaultV);
           } else {
-            const defaultV = data.find(v => v.ShortName.includes('en-US-Aria')) || data[0];
+            const defaultV = voicesArray.find((v: Voice) => v.ShortName?.includes('en-US-Aria')) || voicesArray[0];
             setSelectedVoice(defaultV);
           }
         }
@@ -86,27 +91,38 @@ export default function Home() {
             stability: 0.5,
           }),
         });
+        
+        if (!res.ok) throw new Error(await res.text());
+        const audioBlob = await res.blob();
+        const url = URL.createObjectURL(audioBlob);
+        setCurrentAudioUrl(url);
+        setHistory(prev => [{ url, text, voice: getCleanName(), date: new Date() }, ...prev]);
+        setActiveTab('history');
       } else {
-        const requestBody: TTSRequest = {
+        const speedNum = parseFloat(speed);
+        const rateStr = speedNum === 1 ? '+0%' : (speedNum > 1 ? `+${Math.round((speedNum - 1) * 100)}%` : `${Math.round((speedNum - 1) * 100)}%`);
+        const pitchStr = parseInt(pitch) >= 0 ? `+${pitch}Hz` : `${pitch}Hz`;
+
+        const reqBody: TTSRequest = {
           text,
           voice: selectedVoice.ShortName,
-          rate: speed === '1.0' ? '+0%' : `${speed > '1.0' ? '+' : ''}${Math.round((parseFloat(speed) - 1) * 100)}%`,
+          rate: rateStr,
+          pitch: pitchStr,
         };
+
         res = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify(reqBody),
         });
-      }
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.error || await res.text() || 'An unknown error occurred');
+        if (!res.ok) throw new Error(await res.text());
+        const audioBlob = await res.blob();
+        const url = URL.createObjectURL(audioBlob);
+        setCurrentAudioUrl(url);
+        setHistory(prev => [{ url, text, voice: getCleanName(), date: new Date() }, ...prev]);
+        setActiveTab('history');
       }
-
-      const audioBlob = await res.blob();
-      const url = URL.createObjectURL(audioBlob);
-      setCurrentAudioUrl(url);
 
     } catch (err: any) {
       console.error('Generation Error:', err);
@@ -128,7 +144,7 @@ export default function Home() {
 
   const getCleanName = (): string => {
     if (!selectedVoice) return 'Select Voice';
-    if (provider === 'elevenlabs') return selectedVoice.name || 'Unknown';
+    if (provider === 'elevenlabs') return (selectedVoice.name || 'Unknown').split('-')[0].trim();
     const short = selectedVoice.ShortName || "";
     return short.split('-').pop()?.replace('Neural', '') || short || 'Unknown';
   };
@@ -288,81 +304,150 @@ export default function Home() {
           {/* Right: Settings Panel */}
           <div className="w-80 border-l border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 flex flex-col overflow-y-auto">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex gap-6">
-              <button className="text-sm font-bold text-slate-900 dark:text-white border-b-2 border-slate-900 dark:border-white pb-1">Settings</button>
-              <button className="text-sm font-medium text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 pb-1">History</button>
+              <button 
+                onClick={() => setActiveTab('settings')}
+                className={`text-sm font-bold pb-1 border-b-2 ${activeTab === 'settings' ? 'text-slate-900 dark:text-white border-slate-900 dark:border-white' : 'text-slate-400 dark:text-slate-500 border-transparent hover:text-slate-600 dark:hover:text-slate-300'}`}
+              >
+                Settings
+              </button>
+              <button 
+                onClick={() => setActiveTab('history')}
+                className={`text-sm font-bold pb-1 border-b-2 ${activeTab === 'history' ? 'text-slate-900 dark:text-white border-slate-900 dark:border-white' : 'text-slate-400 dark:text-slate-500 border-transparent hover:text-slate-600 dark:hover:text-slate-300'}`}
+              >
+                History {history.length > 0 && <span className="ml-1 bg-brand-100 text-brand-600 px-1.5 py-0.5 rounded-full text-[10px]">{history.length}</span>}
+              </button>
             </div>
 
-            <div className="p-6 space-y-6 flex-1">
-              
-              <div>
-                <label className="block text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider mb-2">Voice</label>
-                <button
-                  onClick={() => setIsVoiceModalOpen(true)}
-                  className="w-full flex items-center justify-between p-3.5 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-2xl hover:border-amber-400 dark:hover:border-amber-700 hover:shadow-md transition-all group text-left"
-                >
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-amber-500">👑</span>
-                      <span className="font-bold text-slate-900 dark:text-white text-sm">
-                        {getCleanName()}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {getSubtitle()}
-                    </p>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 dark:text-slate-600 group-hover:text-amber-500 transition-colors" />
-                </button>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider mb-2">Language</label>
-                <div className="relative">
-                  <select
-                    className="w-full appearance-none p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  >
-                    <option>Auto</option>
-                  </select>
-                  <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-
-              {provider === 'elevenlabs' ? (
-                <>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Similarity Boost</label>
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{intensity}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={intensity}
-                      onChange={(e) => setIntensity(e.target.value)}
-                      className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
-                    />
-                  </div>
-                </>
-              ) : (
+            {activeTab === 'settings' ? (
+              <div className="p-6 space-y-6 flex-1">
+                
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Speed</label>
-                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{speed}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2.0"
-                    step="0.1"
-                    value={speed}
-                    onChange={(e) => setSpeed(e.target.value)}
-                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
-                  />
+                  <label className="block text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider mb-2">Voice</label>
+                  <button
+                    onClick={() => setIsVoiceModalOpen(true)}
+                    className="w-full flex items-center justify-between p-3.5 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-2xl hover:border-amber-400 dark:hover:border-amber-700 hover:shadow-md transition-all group text-left"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-amber-500">👑</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-sm">
+                          {getCleanName()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {getSubtitle()}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-slate-300 dark:text-slate-600 group-hover:text-amber-500 transition-colors" />
+                  </button>
                 </div>
-              )}
 
-            </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider mb-2">Language</label>
+                  <div className="relative">
+                    <select
+                      className="w-full appearance-none p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                    >
+                      <option>Auto</option>
+                      {Array.from(new Set(Object.values(LOCALE_TO_LANGUAGE))).sort().map(lang => (
+                        <option key={lang} value={lang as string}>{lang as string}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider mb-2">Emotion</label>
+                    <div className="relative">
+                      <select
+                        className="w-full appearance-none p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                      >
+                        <option>Neutral</option>
+                        <option>Happy</option>
+                        <option>Sad</option>
+                        <option>Angry</option>
+                        <option>Excited</option>
+                        <option>Whisper</option>
+                      </select>
+                      <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                {provider === 'elevenlabs' ? (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Similarity Boost</label>
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{intensity}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={intensity}
+                        onChange={(e) => setIntensity(e.target.value)}
+                        className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Speed</label>
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{speed}x</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2.0"
+                        step="0.1"
+                        value={speed}
+                        onChange={(e) => setSpeed(e.target.value)}
+                        className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Pitch</label>
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{pitch}Hz</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-50"
+                        max="50"
+                        step="1"
+                        value={pitch}
+                        onChange={(e) => setPitch(e.target.value)}
+                        className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="p-6 space-y-4 flex-1">
+                {history.length === 0 ? (
+                  <div className="text-center text-slate-500 dark:text-slate-400 mt-10">
+                    <AudioWaveform className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No generated audio yet.</p>
+                  </div>
+                ) : (
+                  history.map((item, i) => (
+                    <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm relative">
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-white mb-1 flex items-center justify-between">
+                        <span>{item.voice}</span>
+                        <span className="text-[10px] text-slate-400 font-normal">{item.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">"{item.text}"</p>
+                      <audio src={item.url} controls className="w-full h-8" />
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
 
             <div className="p-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 mt-auto">
               <button

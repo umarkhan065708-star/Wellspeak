@@ -46,7 +46,11 @@ export default function ClonePage() {
       setFile(null);
       setName('');
     } catch (err: any) {
-      setError(err.message);
+      if (err.message?.includes('missing_permissions') || err.message?.includes('unauthorized')) {
+        setError('Your ElevenLabs API key does not have permission to clone voices (voices_write). Please upgrade your plan or use an API key with correct permissions.');
+      } else {
+        setError(err.message || 'Failed to clone voice');
+      }
     } finally {
       setIsCloning(false);
     }
