@@ -16,6 +16,7 @@ export interface Voice {
     gender?: string;
     use_case?: string;
   };
+  preview_url?: string;
 }
 
 export interface TTSRequest {
