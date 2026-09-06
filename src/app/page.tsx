@@ -7,7 +7,6 @@ import { Sidebar } from '@/components/Sidebar';
 import { VoiceModal } from '@/components/VoiceModal';
 import { Voice, TTSRequest } from '@/lib/types';
 import { getLanguageName, LOCALE_TO_LANGUAGE } from '@/lib/languages';
-import { AudioPlayer } from '@/components/AudioPlayer';
 import { Sparkles, Play, Settings2, ChevronRight, AlertCircle, Loader2, User, LogOut, ChevronDown, Video, Presentation, AudioWaveform, Speech, PlayCircle, Library, Mic2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -17,24 +16,39 @@ export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [provider, setProvider] = useState<'edge' | 'elevenlabs'>('elevenlabs');
   const [text, setText] = useState('');
   const [voices, setVoices] = useState<Voice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<Voice | null>(null);
-  
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
   
   const [speed, setSpeed] = useState('1.0');
   const [pitch, setPitch] = useState('0');
-  const [intensity, setIntensity] = useState('75');
   
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [activeTab, setActiveTab] = useState<'settings' | 'history'>('settings');
-  const [history, setHistory] = useState<{url: string, text: string, voice: string, date: Date}[]>([]);
+  const [history, setHistory] = useState<{id: string, url: string, text: string, voice: string, date: Date}[]>([]);
+  const [selectedHistory, setSelectedHistory] = useState<string[]>([]);
+
+  const toggleSelectAll = () => {
+    if (selectedHistory.length === history.length) {
+      setSelectedHistory([]);
+    } else {
+      setSelectedHistory(history.map(h => h.id));
+    }
+  };
+
+  const deleteSelectedHistory = () => {
+    setHistory(prev => prev.filter(h => !selectedHistory.includes(h.id)));
+    setSelectedHistory([]);
+  };
+
+  const deleteHistoryItem = (id: string) => {
+    setHistory(prev => prev.filter(h => h.id !== id));
+    setSelectedHistory(prev => prev.filter(s => s !== id));
+  };
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -43,100 +57,64 @@ export default function Home() {
   }, [status, router]);
 
   useEffect(() => {
-    const endpoint = provider === 'elevenlabs' ? '/api/elevenlabs/voices' : '/api/voices';
     setVoices([]);
     setSelectedVoice(null);
 
-    fetch(endpoint)
+    fetch('/api/voices')
       .then((res) => res.json())
       .then((data: any) => {
         const voicesArray = Array.isArray(data) ? data : (data.voices || []);
         setVoices(voicesArray);
         if (voicesArray.length > 0) {
-          if (provider === 'elevenlabs') {
-            const defaultV = voicesArray.find((v: Voice) => v.name?.includes('Rachel') || v.name?.includes('Adam')) || voicesArray[0];
-            setSelectedVoice(defaultV);
-          } else {
-            const defaultV = voicesArray.find((v: Voice) => v.ShortName?.includes('en-US-Aria')) || voicesArray[0];
-            setSelectedVoice(defaultV);
-          }
+          const defaultV = voicesArray.find((v: Voice) => v.ShortName?.includes('en-US-Aria')) || voicesArray[0];
+          setSelectedVoice(defaultV);
         }
       })
       .catch((err) => console.error('Failed to load voices:', err));
-  }, [provider]);
+  }, []);
 
   const isArabicScript = /[\u0600-\u06FF]/.test(text);
-  let showLanguageWarning = false;
-  if (provider === 'edge' && selectedVoice) {
-    showLanguageWarning = isArabicScript && !selectedVoice.Locale.startsWith('ar') && !selectedVoice.Locale.startsWith('ur');
-  }
+  const showLanguageWarning = selectedVoice ? (isArabicScript && !selectedVoice.Locale.startsWith('ar') && !selectedVoice.Locale.startsWith('ur')) : false;
 
   const handleGenerate = async () => {
     if (!text.trim() || !selectedVoice) return;
-
+    
     setIsGenerating(true);
-    setCurrentAudioUrl(null);
     setError(null);
 
     try {
-      let res;
-      if (provider === 'elevenlabs') {
-        res = await fetch('/api/elevenlabs/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text,
-            voice_id: selectedVoice.voice_id,
-            similarity_boost: parseInt(intensity) / 100,
-            stability: 0.5,
-          }),
-        });
-        
-        if (!res.ok) throw new Error(await res.text());
-        const audioBlob = await res.blob();
-        const url = URL.createObjectURL(audioBlob);
-        setCurrentAudioUrl(url);
-        setHistory(prev => [{ url, text, voice: getCleanName(), date: new Date() }, ...prev]);
-        setActiveTab('history');
-      } else {
-        const speedNum = parseFloat(speed);
-        const rateStr = speedNum === 1 ? '+0%' : (speedNum > 1 ? `+${Math.round((speedNum - 1) * 100)}%` : `${Math.round((speedNum - 1) * 100)}%`);
-        const pitchStr = parseInt(pitch) >= 0 ? `+${pitch}Hz` : `${pitch}Hz`;
+      const speedNum = parseFloat(speed);
+      const rateStr = speedNum === 1 ? '+0%' : (speedNum > 1 ? `+${Math.round((speedNum - 1) * 100)}%` : `${Math.round((speedNum - 1) * 100)}%`);
+      const pitchStr = parseInt(pitch) >= 0 ? `+${pitch}Hz` : `${pitch}Hz`;
 
-        const reqBody: TTSRequest = {
-          text,
-          voice: selectedVoice.ShortName,
-          rate: rateStr,
-          pitch: pitchStr,
-        };
+      const reqBody: TTSRequest = {
+        text,
+        voice: selectedVoice.ShortName,
+        rate: rateStr,
+        pitch: pitchStr,
+      };
 
-        res = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(reqBody),
-        });
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody),
+      });
 
-        if (!res.ok) throw new Error(await res.text());
-        const audioBlob = await res.blob();
-        const url = URL.createObjectURL(audioBlob);
-        setCurrentAudioUrl(url);
-        setHistory(prev => [{ url, text, voice: getCleanName(), date: new Date() }, ...prev]);
-        setActiveTab('history');
-      }
-
+      if (!res.ok) throw new Error(await res.text());
+      const audioBlob = await res.blob();
+      const url = URL.createObjectURL(audioBlob);
+      const newHistoryItem = {
+        id: Date.now().toString(),
+        url,
+        text,
+        voice: getCleanName(),
+        date: new Date()
+      };
+      setHistory(prev => [newHistoryItem, ...prev]);
+      setActiveTab('history');
     } catch (err: any) {
       console.error('Generation Error:', err);
-      // Clean up the error message if it contains nested JSON stringification
-      let msg = err.message || 'Unable to generate audio.';
-      try {
-        if (msg.includes('ElevenLabs API error:')) {
-          const jsonStr = msg.replace('ElevenLabs API error: ', '');
-          const parsed = JSON.parse(jsonStr);
-          msg = parsed.detail?.message || parsed.message || msg;
-        }
-      } catch (e) {}
-      
-      setError(msg);
+      setError(err.message || 'Unable to generate audio.');
     } finally {
       setIsGenerating(false);
     }
@@ -144,18 +122,12 @@ export default function Home() {
 
   const getCleanName = (): string => {
     if (!selectedVoice) return 'Select Voice';
-    if (provider === 'elevenlabs') return (selectedVoice.name || 'Unknown').split('-')[0].trim();
     const short = selectedVoice.ShortName || "";
     return short.split('-').pop()?.replace('Neural', '') || short || 'Unknown';
   };
 
   const getSubtitle = () => {
     if (!selectedVoice) return 'Click to choose';
-    if (provider === 'elevenlabs') {
-      const accent = selectedVoice.labels?.accent || "English";
-      const gender = selectedVoice.labels?.gender || "Unknown";
-      return `${accent} - ${gender}`;
-    }
     return `${getLanguageName(selectedVoice.Locale || "")} - ${selectedVoice.Gender}`;
   };
 
@@ -171,7 +143,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen bg-white">
-      <Sidebar provider={provider} setProvider={setProvider} />
+      <Sidebar />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         
@@ -256,7 +228,7 @@ export default function Home() {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Write or paste your script..."
-                maxLength={provider === 'elevenlabs' ? 10000 : 60000}
+                maxLength={60000}
                 className="flex-1 w-full p-6 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-600 bg-transparent focus:outline-none resize-none text-lg leading-relaxed"
               />
               <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-4 bg-slate-50/50 dark:bg-slate-900">
@@ -284,21 +256,10 @@ export default function Home() {
                 </div>
 
                 <div className="text-xs text-slate-400 font-medium">
-                  {text.length} / {provider === 'elevenlabs' ? '10,000' : '60,000'}
+                  {text.length} / 60,000
                 </div>
               </div>
             </div>
-
-            {currentAudioUrl && selectedVoice && (
-              <div className="mt-auto">
-                <h3 className="text-sm font-bold text-slate-900 mb-3">Generated Audio</h3>
-                <AudioPlayer
-                  audioUrl={currentAudioUrl}
-                  textSnippet={text}
-                  voiceName={getCleanName()}
-                />
-              </div>
-            )}
           </div>
 
           {/* Right: Settings Panel */}
@@ -374,77 +335,126 @@ export default function Home() {
                     </div>
                   </div>
 
-                {provider === 'elevenlabs' ? (
-                  <>
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Similarity Boost</label>
-                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{intensity}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={intensity}
-                        onChange={(e) => setIntensity(e.target.value)}
-                        className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
-                      />
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Speed</label>
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{speed}x</span>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Speed</label>
-                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{speed}x</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2.0"
-                        step="0.1"
-                        value={speed}
-                        onChange={(e) => setSpeed(e.target.value)}
-                        className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
-                      />
-                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={speed}
+                      onChange={(e) => setSpeed(e.target.value)}
+                      className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
+                    />
+                  </div>
 
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Pitch</label>
-                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{pitch}Hz</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="-50"
-                        max="50"
-                        step="1"
-                        value={pitch}
-                        onChange={(e) => setPitch(e.target.value)}
-                        className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
-                      />
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Pitch</label>
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{pitch}Hz</span>
                     </div>
-                  </>
-                )}
+                    <input
+                      type="range"
+                      min="-50"
+                      max="50"
+                      step="1"
+                      value={pitch}
+                      onChange={(e) => setPitch(e.target.value)}
+                      className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-brand-500"
+                    />
+                  </div>
               </div>
             ) : (
-              <div className="p-6 space-y-4 flex-1">
+              <div className="p-6 space-y-4 flex-1 flex flex-col">
+                {history.length > 0 && (
+                  <div className="flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-sm">
+                    <label className="flex items-center gap-3 cursor-pointer text-sm font-bold text-slate-700 dark:text-slate-300">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedHistory.length === history.length}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 rounded text-brand-500 border-slate-300 focus:ring-brand-500 cursor-pointer"
+                      />
+                      Select All
+                    </label>
+                    {selectedHistory.length > 0 && (
+                      <button 
+                        onClick={deleteSelectedHistory}
+                        className="text-xs font-bold bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-3 py-1.5 rounded-lg hover:bg-rose-200 transition-colors"
+                      >
+                        Delete ({selectedHistory.length})
+                      </button>
+                    )}
+                  </div>
+                )}
+                
                 {history.length === 0 ? (
                   <div className="text-center text-slate-500 dark:text-slate-400 mt-10">
                     <AudioWaveform className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">No generated audio yet.</p>
                   </div>
                 ) : (
-                  history.map((item, i) => (
-                    <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm relative">
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-white mb-1 flex items-center justify-between">
-                        <span>{item.voice}</span>
-                        <span className="text-[10px] text-slate-400 font-normal">{item.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                      </h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">"{item.text}"</p>
-                      <audio src={item.url} controls className="w-full h-8" />
-                    </div>
-                  ))
+                  <div className="space-y-4 flex-1 overflow-y-auto pr-1 pb-4">
+                    {history.map((item) => {
+                      const isSelected = selectedHistory.includes(item.id);
+                      return (
+                        <div key={item.id} className={`bg-white dark:bg-slate-900 border ${isSelected ? 'border-brand-500 dark:border-brand-500 shadow-md' : 'border-slate-200 dark:border-slate-800 shadow-sm'} rounded-2xl p-4 relative transition-all`}>
+                          <div className="flex items-start gap-3 mb-3">
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={() => {
+                                if (isSelected) {
+                                  setSelectedHistory(prev => prev.filter(id => id !== item.id));
+                                } else {
+                                  setSelectedHistory(prev => [...prev, item.id]);
+                                }
+                              }}
+                              className="mt-1 w-4 h-4 rounded text-brand-500 border-slate-300 focus:ring-brand-500 cursor-pointer"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                                <span className="truncate pr-2">{item.voice}</span>
+                                <span className="text-[10px] text-slate-400 font-normal shrink-0 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                  {item.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </span>
+                              </h4>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3 line-clamp-2">"{item.text}"</p>
+                              <audio src={item.url} controls className="w-full h-8" />
+                              
+                              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 justify-end">
+                                <a 
+                                  href={item.url} 
+                                  download={`wellspeak-${item.voice.toLowerCase()}-${Date.now()}.mp3`}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                  title="Download"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                </a>
+                                <button 
+                                  onClick={() => setText(item.text)}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                  title="Reuse Script"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                </button>
+                                <button 
+                                  onClick={() => deleteHistoryItem(item.id)}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors"
+                                  title="Delete"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}
@@ -477,8 +487,7 @@ export default function Home() {
         onClose={() => setIsVoiceModalOpen(false)}
         voices={voices}
         onSelectVoice={setSelectedVoice}
-        selectedVoiceId={provider === 'elevenlabs' ? selectedVoice?.voice_id : selectedVoice?.ShortName}
-        provider={provider}
+        selectedVoiceId={selectedVoice?.ShortName}
       />
     </div>
   );

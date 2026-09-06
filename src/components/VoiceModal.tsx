@@ -11,10 +11,9 @@ interface VoiceModalProps {
   voices: Voice[];
   onSelectVoice: (voice: Voice) => void;
   selectedVoiceId?: string;
-  provider: 'edge' | 'elevenlabs';
 }
 
-export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoiceId, provider }: VoiceModalProps) {
+export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoiceId }: VoiceModalProps) {
   const [search, setSearch] = useState("");
   const [filterLang, setFilterLang] = useState("All");
   const [filterGender, setFilterGender] = useState("All");
@@ -36,35 +35,22 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
     setFavorites(newFavs);
     localStorage.setItem('favoriteVoices', JSON.stringify(newFavs));
   };
+  
   if (!isOpen) return null;
 
-  // Extract unique languages/accents for filter
+  // Extract unique languages for filter
   const languages = Array.from(new Set(
-    voices.map(v => provider === 'elevenlabs' ? (v.labels?.accent || "English") : getLanguageName(v.Locale || ""))
+    voices.map(v => getLanguageName(v.Locale || ""))
   )).sort();
 
   const filteredVoices = voices.filter(voice => {
-    let matchesSearch = false;
-    let matchesLang = false;
-    let matchesGender = false;
+    const friendlyName = voice.FriendlyName || "";
+    const shortName = voice.ShortName || "";
+    const matchesSearch = friendlyName.toLowerCase().includes(search.toLowerCase()) || shortName.toLowerCase().includes(search.toLowerCase());
+    const matchesLang = filterLang === "All" || getLanguageName(voice.Locale || "") === filterLang;
+    const matchesGender = filterGender === "All" || (voice.Gender || "").toLowerCase() === filterGender.toLowerCase();
 
-    if (provider === 'elevenlabs') {
-      matchesSearch = (voice.name || "").toLowerCase().includes(search.toLowerCase());
-      const accent = voice.labels?.accent || "English";
-      matchesLang = filterLang === "All" || accent === filterLang;
-      const gender = voice.labels?.gender || "Unknown";
-      matchesGender = filterGender === "All" || gender.toLowerCase() === filterGender.toLowerCase();
-    } else {
-      const friendlyName = voice.FriendlyName || "";
-      const shortName = voice.ShortName || "";
-      matchesSearch = friendlyName.toLowerCase().includes(search.toLowerCase()) || shortName.toLowerCase().includes(search.toLowerCase());
-      matchesLang = filterLang === "All" || getLanguageName(voice.Locale || "") === filterLang;
-      matchesGender = filterGender === "All" || (voice.Gender || "").toLowerCase() === filterGender.toLowerCase();
-    }
-    if (showFavoritesOnly) {
-      const voiceId = provider === 'elevenlabs' ? voice.voice_id : voice.ShortName;
-      if (!favorites.includes(voiceId || '')) return false;
-    }
+    if (showFavoritesOnly && !favorites.includes(shortName)) return false;
     
     return matchesSearch && matchesLang && matchesGender;
   });
@@ -76,7 +62,7 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 relative z-10">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Select {provider === 'elevenlabs' ? 'ElevenLabs' : 'Edge'} Voice</h2>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Select Voice</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">Search, filter, and choose a voice for this generation.</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400 transition-colors">
@@ -104,7 +90,7 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
                 onChange={e => setFilterLang(e.target.value)}
                 className="w-full md:w-48 appearance-none pl-10 pr-10 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 cursor-pointer"
               >
-                <option value="All">All {provider === 'elevenlabs' ? 'Accents' : 'Languages'}</option>
+                <option value="All">All Languages</option>
                 {languages.map(lang => (
                   <option key={lang} value={lang}>{lang}</option>
                 ))}
@@ -146,35 +132,15 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {filteredVoices.map(voice => {
-              
-              let cleanName = "";
-              let isSelected = false;
-              let subtitle = "";
-              let key = "";
-              let voiceIdForFav = "";
-
-              if (provider === 'elevenlabs') {
-                cleanName = (voice.name || "Unknown").split('-')[0].trim();
-                isSelected = selectedVoiceId === voice.voice_id;
-                key = voice.voice_id || cleanName;
-                voiceIdForFav = key;
-                const accent = voice.labels?.accent || "English";
-                const gender = voice.labels?.gender || "Unknown";
-                subtitle = `${accent} - ${gender}`;
-              } else {
-                const shortName = voice.ShortName || "";
-                cleanName = shortName.split('-').pop()?.replace('Neural', '') || shortName || "Unknown Voice";
-                isSelected = selectedVoiceId === shortName;
-                key = shortName;
-                voiceIdForFav = shortName;
-                subtitle = `${getLanguageName(voice.Locale || "")} - ${voice.Gender}`;
-              }
-              
-              const isFav = favorites.includes(voiceIdForFav);
+              const shortName = voice.ShortName || "";
+              const cleanName = shortName.split('-').pop()?.replace('Neural', '') || shortName || "Unknown Voice";
+              const isSelected = selectedVoiceId === shortName;
+              const subtitle = `${getLanguageName(voice.Locale || "")} - ${voice.Gender}`;
+              const isFav = favorites.includes(shortName);
 
               return (
                 <div
-                  key={key}
+                  key={shortName}
                   onClick={() => {
                     onSelectVoice(voice);
                     onClose();
@@ -188,32 +154,31 @@ export function VoiceModal({ isOpen, onClose, voices, onSelectVoice, selectedVoi
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-bold text-slate-900 dark:text-white">{cleanName}</h3>
-                      <button onClick={(e) => toggleFavorite(voiceIdForFav, e)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => toggleFavorite(shortName, e)} className="opacity-0 group-hover:opacity-100 transition-opacity">
                         <Star className={`w-3.5 h-3.5 ${isFav ? 'text-amber-500 fill-current opacity-100' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500'}`} />
                       </button>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${provider === 'elevenlabs' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
-                        {provider === 'elevenlabs' ? 'PRO' : 'Premium'}
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                        Premium
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                      {subtitle}
-                    </p>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{subtitle}</p>
                   </div>
-                  
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (provider === 'elevenlabs' && voice.preview_url) {
-                        const audio = new Audio(voice.preview_url);
-                        audio.play();
-                      } else {
-                        alert("Preview not available for this voice.");
-                      }
-                    }}
-                    className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
-                  >
-                    <Play className="w-4 h-4 ml-0.5 fill-current" />
-                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        alert("Preview not available for Edge TTS voices yet.");
+                      }}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                        isSelected 
+                          ? 'bg-brand-500 text-white shadow-md' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:bg-brand-500 group-hover:text-white group-hover:shadow-md'
+                      }`}
+                    >
+                      <Play className="w-4 h-4 ml-1" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
